@@ -95,15 +95,21 @@ func TestCompleteSettings(t *testing.T) {
 		})
 	})
 
-	t.Run("case=passkeys only work for browsers", func(t *testing.T) {
+	t.Run("case=passkeys work for API flows", func(t *testing.T) {
 		id := fix.createIdentityWithoutPasskey(t)
 		require.NoError(t, fix.reg.PrivilegedIdentityPool().UpdateIdentity(fix.ctx, id))
 
 		apiClient := testhelpers.NewHTTPClientWithIdentitySessionToken(t, ctx, fix.reg, id)
 		f := testhelpers.InitializeSettingsFlowViaAPI(t, apiClient, fix.publicTS)
+		// Verify passkey nodes are present in API flows
+		var hasPasskeyGroup bool
 		for _, n := range f.Ui.Nodes {
-			assert.NotEqual(t, n.Group, "passkey", "unexpected group: %s", n.Group)
+			if n.Group == "passkey" {
+				hasPasskeyGroup = true
+				break
+			}
 		}
+		assert.True(t, hasPasskeyGroup, "expected passkey group in API flow")
 	})
 
 	doAPIFlow := func(t *testing.T, v func(url.Values), id *identity.Identity) (string, *http.Response) {
@@ -123,7 +129,7 @@ func TestCompleteSettings(t *testing.T) {
 		return testhelpers.SettingsMakeRequest(t, false, spa, f, browserClient, testhelpers.EncodeFormAsJSON(t, spa, values))
 	}
 
-	t.Run("case=fails with api submit because only browsers are supported", func(t *testing.T) {
+	t.Run("case=api submit with invalid passkey register payload returns error", func(t *testing.T) {
 		id := fix.createIdentityWithoutPasskey(t)
 		body, res := doAPIFlow(t, func(v url.Values) {
 			v.Set(node.PasskeySettingsRegister, "{}")
@@ -131,7 +137,8 @@ func TestCompleteSettings(t *testing.T) {
 		}, id)
 
 		assert.Contains(t, res.Request.URL.String(), fix.publicTS.URL+settings.RouteSubmitFlow)
-		assert.Equal(t, text.NewErrorValidationSettingsNoStrategyFound().Text, gjson.Get(body, "ui.messages.0.text").String(), "%s", body)
+		// API flows now work for passkey, but invalid payload should return error
+		assert.Contains(t, gjson.Get(body, "ui.messages.0.text").String(), "WebAuthn", "%s", body)
 	})
 
 	t.Run("case=fails with browser submit because csrf token is missing", func(t *testing.T) {

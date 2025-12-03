@@ -53,11 +53,9 @@ func (s *Strategy) PopulateSettingsMethod(ctx context.Context, r *http.Request, 
 	ctx, span := s.d.Tracer(ctx).Tracer().Start(ctx, "selfservice.strategy.passkey.Strategy.PopulateSettingsMethod")
 	defer otelx.End(span, &err)
 
-	if f.Type != flow.TypeBrowser {
-		return nil
+	if f.Type == flow.TypeBrowser {
+		f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
 	}
-
-	f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
 	count, err := s.d.IdentityManager().CountActiveFirstFactorCredentials(ctx, id)
 	if err != nil {
 		return err
@@ -167,10 +165,6 @@ func (s *Strategy) Settings(ctx context.Context, w http.ResponseWriter, r *http.
 	ctx, span := s.d.Tracer(ctx).Tracer().Start(ctx, "selfservice.strategy.passkey.Strategy.Settings")
 	defer otelx.End(span, &err)
 
-	if f.Type != flow.TypeBrowser {
-		span.SetAttributes(attribute.String("not_responsible_reason", "not a browser flow"))
-		return nil, errors.WithStack(flow.ErrStrategyNotResponsible)
-	}
 	var p updateSettingsFlowWithPasskeyMethod
 	ctxUpdate, err := settings.PrepareUpdate(s.d, w, r, f, ss, settings.ContinuityKey(s.SettingsStrategyID()), &p)
 	if errors.Is(err, settings.ErrContinuePreviousAction) {

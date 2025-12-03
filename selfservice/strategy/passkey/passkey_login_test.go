@@ -50,9 +50,24 @@ func TestPopulateLoginMethod(t *testing.T) {
 	fix := newLoginFixture(t)
 	s := passkey.NewStrategy(fix.reg)
 
-	t.Run("case=should not handle API flows", func(t *testing.T) {
-		loginFlow := &login.Flow{Type: flow.TypeAPI}
-		assert.Nil(t, s.PopulateLoginMethodFirstFactor(nil, loginFlow))
+	t.Run("case=should handle API flows", func(t *testing.T) {
+		r := httptest.NewRequest("GET", "/self-service/login/api", nil)
+		r = r.WithContext(fix.ctx)
+		loginFlow, err := login.NewFlow(fix.conf, time.Minute, "csrf_token", r, flow.TypeAPI)
+		require.NoError(t, err)
+		require.NoError(t, s.PopulateLoginMethodFirstFactor(r, loginFlow))
+		// Verify passkey nodes are added for API flows
+		assert.NotNil(t, loginFlow.UI.Nodes.Find(node.PasskeyChallenge))
+	})
+
+	t.Run("case=should handle browser flows", func(t *testing.T) {
+		r := httptest.NewRequest("GET", "/self-service/login/browser", nil)
+		r = r.WithContext(fix.ctx)
+		loginFlow, err := login.NewFlow(fix.conf, time.Minute, "csrf_token", r, flow.TypeBrowser)
+		require.NoError(t, err)
+		require.NoError(t, s.PopulateLoginMethodFirstFactor(r, loginFlow))
+		// Verify passkey nodes are added for browser flows
+		assert.NotNil(t, loginFlow.UI.Nodes.Find(node.PasskeyChallenge))
 	})
 }
 

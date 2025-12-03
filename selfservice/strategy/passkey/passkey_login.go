@@ -48,7 +48,9 @@ func (s *Strategy) RegisterLoginRoutes(r *x.RouterPublic) {
 func (s *Strategy) populateLoginMethodForPasskeys(r *http.Request, loginFlow *login.Flow) error {
 	ctx := r.Context()
 
-	loginFlow.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	if loginFlow.Type == flow.TypeBrowser {
+		loginFlow.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	}
 
 	ds, err := loginFlow.IdentitySchema.URL(r.Context(), s.d.Config())
 	if err != nil {
@@ -154,11 +156,6 @@ type updateLoginFlowWithPasskeyMethod struct {
 func (s *Strategy) Login(w http.ResponseWriter, r *http.Request, f *login.Flow, _ *session.Session) (i *identity.Identity, err error) {
 	ctx, span := s.d.Tracer(r.Context()).Tracer().Start(r.Context(), "selfservice.strategy.passkey.Strategy.Login")
 	defer otelx.End(span, &err)
-
-	if f.Type != flow.TypeBrowser {
-		span.SetAttributes(attribute.String("not_responsible_reason", "flow type is not browser"))
-		return nil, flow.ErrStrategyNotResponsible
-	}
 
 	var p updateLoginFlowWithPasskeyMethod
 	if err := s.hd.Decode(r, &p,
@@ -292,10 +289,6 @@ func (s *Strategy) loginAuthenticate(ctx context.Context, r *http.Request, f *lo
 }
 
 func (s *Strategy) PopulateLoginMethodFirstFactorRefresh(r *http.Request, f *login.Flow, _ *session.Session) error {
-	if f.Type != flow.TypeBrowser {
-		return nil
-	}
-
 	ctx := r.Context()
 
 	identifier, id, _ := flowhelpers.GuessForcedLoginIdentifier(r, s.d, f, s.ID())
@@ -390,7 +383,9 @@ func (s *Strategy) PopulateLoginMethodFirstFactorRefresh(r *http.Request, f *log
 		}),
 	).WithMetaLabel(text.NewInfoSelfServiceLoginPasskey()))
 
-	f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	if f.Type == flow.TypeBrowser {
+		f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	}
 	f.UI.SetNode(node.NewInputField(
 		"identifier",
 		passkeyIdentifier,
@@ -402,10 +397,6 @@ func (s *Strategy) PopulateLoginMethodFirstFactorRefresh(r *http.Request, f *log
 }
 
 func (s *Strategy) PopulateLoginMethodFirstFactor(r *http.Request, f *login.Flow) error {
-	if f.Type != flow.TypeBrowser {
-		return nil
-	}
-
 	if err := s.populateLoginMethodForPasskeys(r, f); err != nil {
 		return err
 	}
@@ -426,10 +417,6 @@ func (s *Strategy) PopulateLoginMethodFirstFactor(r *http.Request, f *login.Flow
 }
 
 func (s *Strategy) PopulateLoginMethodIdentifierFirstCredentials(r *http.Request, sr *login.Flow, opts ...login.FormHydratorModifier) error {
-	if sr.Type != flow.TypeBrowser {
-		return errors.WithStack(idfirst.ErrNoCredentialsFound)
-	}
-
 	ctx := r.Context()
 	o := login.NewFormHydratorOptions(opts)
 
@@ -466,10 +453,6 @@ func (s *Strategy) PopulateLoginMethodIdentifierFirstCredentials(r *http.Request
 }
 
 func (s *Strategy) PopulateLoginMethodIdentifierFirstIdentification(r *http.Request, sr *login.Flow) error {
-	if sr.Type != flow.TypeBrowser {
-		return nil
-	}
-
 	if err := s.populateLoginMethodForPasskeys(r, sr); err != nil {
 		return err
 	}

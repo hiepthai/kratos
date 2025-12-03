@@ -102,11 +102,6 @@ func (s *Strategy) Register(w http.ResponseWriter, r *http.Request, regFlow *reg
 	ctx, span := s.d.Tracer(r.Context()).Tracer().Start(r.Context(), "selfservice.strategy.passkey.Strategy.Register")
 	defer otelx.End(span, &err)
 
-	if regFlow.Type != flow.TypeBrowser {
-		span.SetAttributes(attribute.String("not_responsible_reason", "flow type is not browser"))
-		return flow.ErrStrategyNotResponsible
-	}
-
 	ds, err := regFlow.IdentitySchema.URL(ctx, s.d.Config())
 	if err != nil {
 		return err
@@ -211,17 +206,18 @@ type passkeyCreateData struct {
 
 func (s *Strategy) PopulateRegistrationMethod(r *http.Request, f *registration.Flow) error {
 	ctx := r.Context()
-	if f.Type != flow.TypeBrowser {
-		return nil
-	}
 
-	f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	if f.Type == flow.TypeBrowser {
+		f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	}
 	opts, err := s.hydratePassKeyRegistrationOptions(ctx, f)
 	if err != nil {
 		return err
 	}
 
-	f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	if f.Type == flow.TypeBrowser {
+		f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	}
 	f.UI.Nodes.Upsert(injectOptions(opts))
 	f.UI.Nodes.Upsert(passkeyRegisterTrigger())
 	f.UI.Nodes.Upsert(webauthnx.NewWebAuthnScript(s.d.Config().SelfPublicURL(ctx)))
@@ -244,17 +240,18 @@ func (s *Strategy) validateCredentials(ctx context.Context, i *identity.Identity
 
 func (s *Strategy) PopulateRegistrationMethodCredentials(r *http.Request, f *registration.Flow, options ...registration.FormHydratorModifier) error {
 	ctx := r.Context()
-	if f.Type != flow.TypeBrowser {
-		return nil
-	}
 
-	f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	if f.Type == flow.TypeBrowser {
+		f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	}
 	opts, err := s.hydratePassKeyRegistrationOptions(ctx, f)
 	if err != nil {
 		return err
 	}
 
-	f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	if f.Type == flow.TypeBrowser {
+		f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	}
 	f.UI.Nodes.Upsert(injectOptions(opts))
 	f.UI.Nodes.Upsert(passkeyRegisterTrigger())
 	f.UI.Nodes.Upsert(webauthnx.NewWebAuthnScript(s.d.Config().SelfPublicURL(ctx)))
@@ -264,16 +261,15 @@ func (s *Strategy) PopulateRegistrationMethodCredentials(r *http.Request, f *reg
 
 func (s *Strategy) PopulateRegistrationMethodProfile(r *http.Request, f *registration.Flow, options ...registration.FormHydratorModifier) error {
 	ctx := r.Context()
-	if f.Type != flow.TypeBrowser {
-		return nil
-	}
 
 	opts, err := s.hydratePassKeyRegistrationOptions(ctx, f)
 	if err != nil {
 		return err
 	}
 
-	f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	if f.Type == flow.TypeBrowser {
+		f.UI.SetCSRF(s.d.GenerateCSRFToken(r))
+	}
 	f.UI.Nodes.RemoveMatching(injectOptions(opts))
 	f.UI.Nodes.RemoveMatching(passkeyRegisterTrigger())
 	f.UI.Nodes.RemoveMatching(webauthnx.NewWebAuthnScript(s.d.Config().SelfPublicURL(ctx)))
